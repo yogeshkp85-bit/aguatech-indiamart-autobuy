@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & local credentials (CRITICAL: Do not commit cookies/passwords)
+.env
+config.local.json
+*.cookie
+session_state.json
+
+# Logs
+*.log
+leads_history.json
+leads_db.sqlite3
+
+# Playwright & Virtual Environments
+.venv/
+venv/
+ENV/
+.playwright/
