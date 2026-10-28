@@ -131,7 +131,32 @@ class AquatechAutomationCore:
             "https://seller.indiamart.com/blapi/v1/consume"
         )
 
-    def load_lead_history(self) -> Set[str]:
+    async def handle_health_check(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """Responds to Railway and cloud provider HTTP health checks to keep service alive."""
+        try:
+            line = await reader.readline()
+            mode_str = "DRY_RUN" if self.dry_run else "LIVE_BUY"
+            resp_body = json.dumps({
+                "status": "healthy",
+                "app": "Aguatech IndiaMART AutoBuy Bot",
+                "mode": mode_str,
+                "leads_bought_today": self.leads_bought_today,
+                "max_daily_leads": self.max_daily_leads
+            }).encode("utf-8")
+            
+            http_response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: application/json; charset=utf-8\r\n"
+                b"Content-Length: " + str(len(resp_body)).encode("ascii") + b"\r\n"
+                b"Connection: close\r\n\r\n"
+                + resp_body
+            )
+            writer.write(http_response)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+        except Exception:
+            pass
         """Loads previously processed lead IDs to prevent duplicate buys."""
         processed: Set[str] = set()
         if os.path.exists(self.history_path):
@@ -343,6 +368,17 @@ class AquatechAutomationCore:
             )
 
         self.is_running = True
+
+        # Railway & Cloud Healthcheck Server
+        port_env = os.getenv("PORT")
+        if port_env:
+            try:
+                port = int(port_env)
+                server = await asyncio.start_server(self.handle_health_check, "0.0.0.0", port)
+                logger.info(f"Railway HTTP Healthcheck listener bound to 0.0.0.0:{port}")
+            except Exception as port_err:
+                logger.warning(f"Could not bind Railway healthcheck port {port_env}: {port_err}")
+
         await self.notifier.send_system_message(
             f"🚀 <b>Aguatech Auto-Buy Bot Started!</b>\n"
             f"Mode: {'🟡 Dry-Run' if self.dry_run else '🔴 Live Purchasing'}\n"
