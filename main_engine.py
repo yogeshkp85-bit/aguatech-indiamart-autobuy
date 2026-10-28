@@ -157,6 +157,8 @@ class AquatechAutomationCore:
             await writer.wait_closed()
         except Exception:
             pass
+
+    def load_lead_history(self) -> Set[str]:
         """Loads previously processed lead IDs to prevent duplicate buys."""
         processed: Set[str] = set()
         if os.path.exists(self.history_path):
