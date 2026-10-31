@@ -190,7 +190,8 @@ class AquatechAutomationCore:
             "tier": filter_res.tier,
             "matched_keyword": filter_res.matched_keyword,
             "matched_location": filter_res.matched_location,
-            "rejection_reason": filter_res.rejection_reason
+            "rejection_reason": filter_res.rejection_reason,
+            "buyer_metrics": lead.get("buyer_metrics", {})
         }
         try:
             records = []
@@ -253,21 +254,53 @@ class AquatechAutomationCore:
                             city = item.get("GLUSR_CITY") or item.get("GLUSR_USR_CITY") or ""
                             state = item.get("GLUSR_STATE") or item.get("GLUSR_USR_STATE") or ""
                             loc = f"{city}, {state}".strip(", ")
-                            is_ver = bool(
-                                item.get("GLUSR_USR_ISVERIFIED") in (1, "1", True)
-                                or item.get("IS_VERIFIED") in (1, "1", True)
-                                or item.get("GLUSR_USR_GST")
-                            )
+
+                            # Buyer verification & engagement
+                            add_details = item.get("ETO_OFR_ADDITIONAL_DETAILS")
+                            req_cnt = 0
+                            call_cnt = 0
+                            reply_cnt = 0
+                            past_mcats = ""
+                            is_whatsapp = False
+
+                            if isinstance(add_details, list) and len(add_details) > 0:
+                                d0 = add_details[0]
+                                req_cnt = d0.get("eto_ofr_buyer_tot_requirement") or d0.get("eto_ofr_buyer_tot_req_cnt") or 0
+                                call_cnt = d0.get("eto_ofr_buyer_tot_unq_calls_cnt") or 0
+                                reply_cnt = d0.get("eto_ofr_buyer_reply_cnt") or d0.get("eto_ofr_buyer_tot_replies_cnt") or 0
+                                past_mcats = d0.get("eto_ofr_buyer_prime_mcats") or ""
+                                is_whatsapp = bool(d0.get("is_whatsapp_active") in (1, "1", True))
+
+                            reply_rate = round((reply_cnt / req_cnt * 100), 1) if req_cnt > 0 else 0.0
+
+                            is_gst = bool(item.get("ETO_OFR_BUYER_IS_GST_VERF") in (1, "1", True) or item.get("GLUSR_USR_GST"))
+                            is_mob = bool(item.get("ETO_OFR_BUYER_IS_MOB_VERF") in (1, "1", True) or item.get("GLUSR_USR_ISVERIFIED") in (1, "1", True))
+                            is_email = bool(item.get("ETO_OFR_EMAIL_VERIFIED") in (1, "1", True))
+                            member_since = item.get("GLUSR_USR_MEMBERSINCE") or "N/A"
+                            approx_val = item.get("ETO_OFR_APPROX_ORDER_VALUE") or ""
+
                             leads.append({
                                 "id": str(item.get("ETO_OFR_ID") or ""),
                                 "subject": item.get("ETO_OFR_TITLE") or item.get("PRIME_MCAT_NAME") or "MHE Requirement",
                                 "desc": item.get("ETO_OFR_DESC") or "",
                                 "location": loc,
                                 "qty": item.get("ETO_OFR_QTY") or 1,
-                                "is_verified": is_ver,
+                                "is_verified": is_mob,
                                 "buyer_gst": item.get("GLUSR_USR_GST") or "",
-                                "approx_value": item.get("ETO_OFR_APPROX_ORDER_VALUE") or "",
+                                "approx_value": approx_val,
                                 "time": item.get("BLDATETIME") or "",
+                                "buyer_metrics": {
+                                    "member_since": member_since,
+                                    "is_gst": is_gst,
+                                    "is_mob": is_mob,
+                                    "is_email": is_email,
+                                    "is_whatsapp": is_whatsapp,
+                                    "req_count": req_cnt,
+                                    "call_count": call_cnt,
+                                    "reply_count": reply_cnt,
+                                    "reply_rate": reply_rate,
+                                    "past_buys": past_mcats
+                                },
                                 "raw": item
                             })
                         if leads:

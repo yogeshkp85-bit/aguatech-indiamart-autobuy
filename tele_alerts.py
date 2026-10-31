@@ -91,8 +91,26 @@ class TelegramNotifier:
         if len(desc) > 300:
             desc = desc[:300] + "..."
 
-        is_verified = lead.get("is_verified", False)
-        ver_badge = "✅ <b>Verified Buyer</b>" if is_verified else "⚪ Standard Inquiry"
+        buyer_metrics = lead.get("buyer_metrics", {})
+        member_since = buyer_metrics.get("member_since", "N/A")
+        is_gst = buyer_metrics.get("is_gst", False)
+        is_mob = buyer_metrics.get("is_mob", False) or lead.get("is_verified", False)
+        is_wa = buyer_metrics.get("is_whatsapp", False)
+        req_cnt = buyer_metrics.get("req_count", 0)
+        call_cnt = buyer_metrics.get("call_count", 0)
+        reply_cnt = buyer_metrics.get("reply_count", 0)
+        reply_rate = buyer_metrics.get("reply_rate", 0.0)
+
+        badges = []
+        if is_mob:
+            badges.append("📱 Mobile Verified")
+        if is_gst:
+            badges.append("🏛️ GST Verified")
+        if is_wa:
+            badges.append("💬 WhatsApp")
+        ver_badge = " • ".join(badges) if badges else "Standard Buyer"
+
+        engagement_str = f"{req_cnt} RFQs | {call_cnt} Calls | {reply_cnt} Replies ({reply_rate}% response)"
 
         if is_dry_run:
             header = f"🟡 <b>[TEST MATCH - DRY RUN (Tier {tier})]</b>"
@@ -102,10 +120,10 @@ class TelegramNotifier:
             footer = "💡 <i>Auto-buy bypassed for this tier to save monthly credits. Review & buy manually if interested.</i>"
         elif action == "QUOTA_REACHED":
             header = f"🔔 <b>[BUDGET CAP REACHED - MANUAL REVIEW]</b>"
-            footer = f"⚠️ <i>Daily limit reached ({quota_str}). Review & buy manually on portal.</i>"
+            footer = f"⚠️ <i>Daily quota reached ({quota_str}). Review & buy manually on portal.</i>"
         elif success:
             header = f"🚀 <b>[AGUATECH MHE LEAD AUTO-BOUGHT (Tier {tier})]</b>"
-            footer = f"✅ <b>Lead purchased instantly! Unlocked in Seller Panel.</b>\n📊 <i>Daily Quota Used: {quota_str or 'N/A'}</i>"
+            footer = f"✅ <b>Lead purchased instantly! Unlocked in Seller Panel.</b>\n📊 <i>Daily Quota: {quota_str or 'N/A'}</i>"
         else:
             header = f"❌ <b>[AGUATECH LEAD PURCHASE FAILED (Tier {tier})]</b>"
             footer = "⚠️ <i>API purchase request failed. Check cookies and credit balance.</i>"
@@ -113,12 +131,14 @@ class TelegramNotifier:
         msg = (
             f"{header}\n\n"
             f"📦 <b>Product:</b> {subject}\n"
-            f"🏷️ <b>Matched Keyword:</b> <code>{kw}</code> (Tier {tier})\n"
+            f"🏷️ <b>Category:</b> <code>{kw}</code> (Tier {tier})\n"
             f"📍 <b>Location:</b> {location}\n"
             f"📊 <b>Required Qty:</b> {qty} Unit(s)\n"
-            f"🛡️ <b>Buyer Status:</b> {ver_badge}\n"
-            f"🆔 <b>Lead ID:</b> <code>{lead_id}</code>\n"
-            f"⏰ <b>Captured:</b> {timestamp}\n\n"
+            f"🆔 <b>Lead ID:</b> <code>{lead_id}</code>\n\n"
+            f"👤 <b>Buyer Intelligence:</b>\n"
+            f"• <b>Tenure:</b> Member since {member_since}\n"
+            f"• <b>Verification:</b> {ver_badge}\n"
+            f"• <b>Activity:</b> {engagement_str}\n\n"
             f"📝 <b>Buyer Requirement:</b>\n"
             f"<blockquote>{desc}</blockquote>\n\n"
             f"{footer}\n\n"
