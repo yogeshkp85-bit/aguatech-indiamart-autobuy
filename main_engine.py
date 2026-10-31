@@ -1,12 +1,14 @@
 """
 Core Asynchronous Runtime Engine for Aguatech Engineers Pvt. Ltd.
-High-frequency IndiaMART BuyLead monitoring, sub-second filtering, and automated acquisition.
+High-frequency IndiaMART BuyLead monitoring, tiered priority filtering,
+quota management, and automated acquisition with rate-limit protection.
 """
 
 import asyncio
 import json
 import logging
 import os
+import random
 import sys
 import time
 from datetime import datetime
@@ -59,7 +61,14 @@ class AquatechAutomationCore:
         )
 
         self.leads_bought_today = 0
-        self.current_date = datetime.now().date()
+        self.leads_bought_this_week = 0
+        self.leads_bought_this_month = 0
+
+        now = datetime.now()
+        self.current_date = now.date()
+        self.current_week = now.isocalendar()[1]
+        self.current_month = now.month
+
         self.processed_lead_ids: Set[str] = self.load_lead_history()
         self.is_running = False
 
@@ -77,7 +86,6 @@ class AquatechAutomationCore:
         notify_cfg = self.raw_config.get("notifications", {})
         settings_cfg = self.raw_config.get("system_settings", {})
 
-        # Environment variables take precedence (vital for Railway deployment)
         self.cookie_string = (
             os.getenv("INDIAMART_COOKIE")
             or session_cfg.get("cookie_string", "")
@@ -100,14 +108,28 @@ class AquatechAutomationCore:
         else:
             self.dry_run = bool(settings_cfg.get("dry_run_mode", True))
 
+        # Human-paced polling interval (default 4.5s prevents high activity blocks)
         self.polling_interval = float(
             os.getenv("POLLING_INTERVAL")
-            or settings_cfg.get("polling_interval_seconds", 0.5)
+            or settings_cfg.get("polling_interval_seconds", 4.5)
+        )
+        self.polling_jitter = float(
+            os.getenv("POLLING_JITTER")
+            or settings_cfg.get("polling_jitter_seconds", 1.0)
         )
 
+        # Budget limits (Daily, Weekly, Monthly)
         self.max_daily_leads = int(
             os.getenv("MAX_LEADS_PER_DAY")
-            or settings_cfg.get("max_leads_per_day", 15)
+            or settings_cfg.get("max_leads_per_day", 8)
+        )
+        self.max_weekly_leads = int(
+            os.getenv("MAX_LEADS_PER_WEEK")
+            or settings_cfg.get("max_leads_per_week", 70)
+        )
+        self.max_monthly_leads = int(
+            os.getenv("MAX_LEADS_PER_MONTH")
+            or settings_cfg.get("max_leads_per_month", 300)
         )
 
         self.proxy_url = (
@@ -139,33 +161,6 @@ class AquatechAutomationCore:
             "https://seller.indiamart.com/blapi/v1/consume"
         )
 
-    async def handle_health_check(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        """Responds to Railway and cloud provider HTTP health checks to keep service alive."""
-        try:
-            line = await reader.readline()
-            mode_str = "DRY_RUN" if self.dry_run else "LIVE_BUY"
-            resp_body = json.dumps({
-                "status": "healthy",
-                "app": "Aguatech IndiaMART AutoBuy Bot",
-                "mode": mode_str,
-                "leads_bought_today": self.leads_bought_today,
-                "max_daily_leads": self.max_daily_leads
-            }).encode("utf-8")
-            
-            http_response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: application/json; charset=utf-8\r\n"
-                b"Content-Length: " + str(len(resp_body)).encode("ascii") + b"\r\n"
-                b"Connection: close\r\n\r\n"
-                + resp_body
-            )
-            writer.write(http_response)
-            await writer.drain()
-            writer.close()
-            await writer.wait_closed()
-        except Exception:
-            pass
-
     def load_lead_history(self) -> Set[str]:
         """Loads previously processed lead IDs to prevent duplicate buys."""
         processed: Set[str] = set()
@@ -192,6 +187,7 @@ class AquatechAutomationCore:
             "location": lead.get("location", "N/A"),
             "qty": lead.get("qty", 1),
             "status": status,
+            "tier": filter_res.tier,
             "matched_keyword": filter_res.matched_keyword,
             "matched_location": filter_res.matched_location,
             "rejection_reason": filter_res.rejection_reason
@@ -204,7 +200,6 @@ class AquatechAutomationCore:
                     if not isinstance(records, list):
                         records = []
             records.append(record)
-            # Keep only last 500 records to prevent file bloat
             if len(records) > 500:
                 records = records[-500:]
             with open(self.history_path, "w", encoding="utf-8") as f:
@@ -224,14 +219,10 @@ class AquatechAutomationCore:
         }
 
     async def fetch_live_leads(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
-        """Asynchronously requests the latest BuyLeads feed."""
+        """Asynchronously requests the latest BuyLeads feed with anti-block guards."""
         if not self.cookie_string:
-            logger.warning(
-                "INDIAMART_COOKIE is empty. Pausing live feed polling (waiting for valid session cookie)... "
-                "Run 'python session_manager.py' or 'python test_simulator.py'."
-            )
+            logger.warning("INDIAMART_COOKIE is empty. Pausing live feed polling...")
             await asyncio.sleep(15)
-            # Re-read configuration in case cookie was added via dashboard or .env
             self.load_configuration()
             return []
 
@@ -240,9 +231,19 @@ class AquatechAutomationCore:
 
             if res.status_code == 200:
                 text = res.text
+
+                # Anti-Rate Limit Guard: Detect IndiaMART's cooldown notice
+                if "unusually high activity" in text or "request limit" in text or "Try again in" in text:
+                    logger.warning("🟡 [RATE LIMIT NOTICE] IndiaMART requested cooldown. Sleeping for 7.5 minutes...")
+                    await self.notifier.send_system_message(
+                        "⚠️ <b>IndiaMART Cooldown Notice:</b> High-frequency activity notice detected. "
+                        "Bot is automatically pausing for 7.5 minutes to safeguard your seller account."
+                    )
+                    await asyncio.sleep(450)
+                    return []
+
                 leads: List[Dict[str, Any]] = []
 
-                # Format 1: Embedded window.__BL_DATA__ state object in HTML
                 if "window.__BL_DATA__=" in text:
                     try:
                         idx = text.find("window.__BL_DATA__=") + len("window.__BL_DATA__=")
@@ -252,13 +253,19 @@ class AquatechAutomationCore:
                             city = item.get("GLUSR_CITY") or item.get("GLUSR_USR_CITY") or ""
                             state = item.get("GLUSR_STATE") or item.get("GLUSR_USR_STATE") or ""
                             loc = f"{city}, {state}".strip(", ")
+                            is_ver = bool(
+                                item.get("GLUSR_USR_ISVERIFIED") in (1, "1", True)
+                                or item.get("IS_VERIFIED") in (1, "1", True)
+                                or item.get("GLUSR_USR_GST")
+                            )
                             leads.append({
                                 "id": str(item.get("ETO_OFR_ID") or ""),
                                 "subject": item.get("ETO_OFR_TITLE") or item.get("PRIME_MCAT_NAME") or "MHE Requirement",
                                 "desc": item.get("ETO_OFR_DESC") or "",
                                 "location": loc,
                                 "qty": item.get("ETO_OFR_QTY") or 1,
-                                "mcat": item.get("PRIME_MCAT_NAME") or "",
+                                "is_verified": is_ver,
+                                "buyer_gst": item.get("GLUSR_USR_GST") or "",
                                 "approx_value": item.get("ETO_OFR_APPROX_ORDER_VALUE") or "",
                                 "time": item.get("BLDATETIME") or "",
                                 "raw": item
@@ -268,7 +275,6 @@ class AquatechAutomationCore:
                     except Exception as parse_err:
                         logger.error(f"Error parsing window.__BL_DATA__: {parse_err}")
 
-                # Format 2: Direct JSON response (API endpoints)
                 try:
                     payload = res.json()
                     if isinstance(payload, dict):
@@ -281,23 +287,19 @@ class AquatechAutomationCore:
                 return leads
 
             elif res.status_code in (301, 302, 401, 403):
-                logger.error(
-                    f"🔴 [AUTHENTICATION REQUIRED - HTTP {res.status_code}] IndiaMART requires an active login session! "
-                    "Session cookie is missing, expired, or redirected to login. "
-                    "Run 'python session_manager.py' or update INDIAMART_COOKIE."
-                )
+                logger.error(f"🔴 [AUTHENTICATION REQUIRED - HTTP {res.status_code}] IndiaMART requires an active login session!")
                 await self.notifier.send_system_message(
                     f"⚠️ <b>CRITICAL ALERT:</b> IndiaMART session cookie is invalid (HTTP {res.status_code})! "
                     "Lead acquisition is paused. Please update session cookie."
                 )
                 await asyncio.sleep(30)
-                # Re-read configuration in case cookie was updated
                 self.load_configuration()
                 return []
 
             elif res.status_code == 429:
-                logger.warning("🟡 Rate limit detected (HTTP 429). Backing off for 10 seconds...")
-                await asyncio.sleep(10)
+                logger.warning("🟡 Rate limit detected (HTTP 429). Sleeping for 7 minutes...")
+                await self.notifier.send_system_message("⚠️ <b>Rate Limit 429:</b> Sleeping for 7 minutes...")
+                await asyncio.sleep(420)
                 return []
 
             else:
@@ -315,27 +317,72 @@ class AquatechAutomationCore:
         filter_res: FilterResult
     ) -> bool:
         """
-        Sends the sub-second transactional POST request to purchase the lead.
-        Guarded by Dry-Run mode.
+        Processes a matching lead with tiered priority and quota budget guards.
         """
         lead_id = str(lead.get("id") or lead.get("glusr_usr_id") or "")
         product = lead.get("subject") or lead.get("title") or "MHE Equipment"
+        tier = filter_res.tier
+        action = filter_res.action
 
+        quota_str = f"{self.leads_bought_today}/{self.max_daily_leads} today | {self.leads_bought_this_week}/{self.max_weekly_leads} week"
+
+        # Action 1: Tier 3 configured as ALERT_ONLY
+        if action == "ALERT_ONLY":
+            logger.info(
+                f"[TIER {tier} ALERT] Alert-only lead: '{product}' (ID: {lead_id}) in {lead.get('location')} | Matched: {filter_res.matched_keyword}"
+            )
+            self.record_lead_history(lead, f"ALERT_ONLY_TIER_{tier}", filter_res)
+            await self.notifier.send_alert(
+                lead=lead,
+                is_dry_run=False,
+                success=True,
+                matched_kw=filter_res.matched_keyword,
+                tier=tier,
+                action="ALERT_ONLY",
+                quota_str=quota_str
+            )
+            return True
+
+        # Action 2: Check Quota Limits (Daily, Weekly, Monthly)
+        if (
+            self.leads_bought_today >= self.max_daily_leads
+            or self.leads_bought_this_week >= self.max_weekly_leads
+            or self.leads_bought_this_month >= self.max_monthly_leads
+        ):
+            logger.info(
+                f"[BUDGET CAP REACHED] Switching to ALERT_ONLY for: '{product}' (ID: {lead_id}). Quota: {quota_str}"
+            )
+            self.record_lead_history(lead, "QUOTA_CAPPED_ALERT", filter_res)
+            await self.notifier.send_alert(
+                lead=lead,
+                is_dry_run=False,
+                success=True,
+                matched_kw=filter_res.matched_keyword,
+                tier=tier,
+                action="QUOTA_REACHED",
+                quota_str=quota_str
+            )
+            return True
+
+        # Action 3: Dry-Run Simulation
         if self.dry_run:
             logger.info(
-                f"[DRY-RUN MATCH] Would have auto-purchased: '{product}' "
+                f"[DRY-RUN MATCH (Tier {tier})] Would have auto-purchased: '{product}' "
                 f"(ID: {lead_id}) in {lead.get('location')} | Matched: {filter_res.matched_keyword}"
             )
-            self.record_lead_history(lead, "DRY_RUN_MATCH", filter_res)
+            self.record_lead_history(lead, f"DRY_RUN_TIER_{tier}", filter_res)
             await self.notifier.send_alert(
                 lead=lead,
                 is_dry_run=True,
                 success=True,
-                matched_kw=filter_res.matched_keyword
+                matched_kw=filter_res.matched_keyword,
+                tier=tier,
+                action="BUY",
+                quota_str=quota_str
             )
             return True
 
-        # LIVE PURCHASE EXECUTION (Consumes real credits)
+        # Action 4: LIVE PURCHASE EXECUTION (Consumes real credits)
         payload = {
             "lead_id": lead_id,
             "mobile": self.account_mobile,
@@ -351,17 +398,23 @@ class AquatechAutomationCore:
             if res.status_code == 200:
                 data = res.json()
                 if data.get("status") in ("success", "ok", 1) or data.get("code") == 200:
-                    logger.info(
-                        f"🎉 SUCCESS! Auto-purchased lead in {latency_ms:.1f}ms: "
-                        f"'{product}' (ID: {lead_id})"
-                    )
                     self.leads_bought_today += 1
-                    self.record_lead_history(lead, "PURCHASED", filter_res)
+                    self.leads_bought_this_week += 1
+                    self.leads_bought_this_month += 1
+                    new_quota_str = f"{self.leads_bought_today}/{self.max_daily_leads} today | {self.leads_bought_this_week}/{self.max_weekly_leads} week"
+                    logger.info(
+                        f"🎉 SUCCESS! Auto-purchased Tier {tier} lead in {latency_ms:.1f}ms: "
+                        f"'{product}' (ID: {lead_id}) | Quota: {new_quota_str}"
+                    )
+                    self.record_lead_history(lead, f"PURCHASED_TIER_{tier}", filter_res)
                     await self.notifier.send_alert(
                         lead=lead,
                         is_dry_run=False,
                         success=True,
-                        matched_kw=filter_res.matched_keyword
+                        matched_kw=filter_res.matched_keyword,
+                        tier=tier,
+                        action="BUY",
+                        quota_str=new_quota_str
                     )
                     return True
                 else:
@@ -371,7 +424,10 @@ class AquatechAutomationCore:
                         lead=lead,
                         is_dry_run=False,
                         success=False,
-                        matched_kw=filter_res.matched_keyword
+                        matched_kw=filter_res.matched_keyword,
+                        tier=tier,
+                        action="BUY",
+                        quota_str=quota_str
                     )
                     return False
             else:
@@ -385,46 +441,30 @@ class AquatechAutomationCore:
             return False
 
     async def start(self) -> None:
-        """Starts the infinite asynchronous monitoring loop."""
+        """Starts the infinite asynchronous monitoring loop with quota resets and anti-detection."""
         print("\n" + "=" * 65)
         print("  AGUATECH ENGINEERS PVT. LTD. - INDIAMART AUTO-BUY SNIPER")
         print("=" * 65)
-        print(f"Company:        Aguatech Engineers Pvt. Ltd. (Pune)")
-        print(f"Sector:         Material Handling Equipment (MHE)")
+        print("Company:        Aguatech Engineers Pvt. Ltd. (Pune)")
+        print("Sector:         Material Handling Equipment (MHE)")
         print(f"Mode:           {'🟡 DRY-RUN (SIMULATION ONLY)' if self.dry_run else '🚀 LIVE BUY (SPENDS CREDITS)'}")
-        print(f"Polling Speed:  Every {self.polling_interval}s")
-        print(f"Daily Cap:      {self.max_daily_leads} leads/day")
+        print(f"Polling Speed:  Every {self.polling_interval}s (+{self.polling_jitter}s jitter)")
+        print(f"Budget Caps:    {self.max_daily_leads}/day | {self.max_weekly_leads}/week | {self.max_monthly_leads}/month")
         print(f"Mobile Account: {self.account_mobile or 'Not configured'}")
-        print(f"Session Cookie: {'[CONFIGURED]' if self.cookie_string else '🔴 [MISSING - Run session_manager.py]'}")
+        print(f"Session Cookie: {'[CONFIGURED]' if self.cookie_string else '🔴 [MISSING]'}")
         print(f"Telegram Alert: {'[ACTIVE]' if (self.telegram_bot_token and self.telegram_chat_id) else '⚪ [OFFLINE]'}")
         print("=" * 65 + "\n")
 
-        if not self.cookie_string:
-            logger.warning(
-                "INDIAMART_COOKIE is empty. Live feed fetching requires a valid session. "
-                "You can run the simulator to test matching without cookies: python test_simulator.py"
-            )
-
         self.is_running = True
-
-        # Railway & Cloud Healthcheck Server
-        port_env = os.getenv("PORT")
-        if port_env:
-            try:
-                port = int(port_env)
-                server = await asyncio.start_server(self.handle_health_check, "0.0.0.0", port)
-                logger.info(f"Railway HTTP Healthcheck listener bound to 0.0.0.0:{port}")
-            except Exception as port_err:
-                logger.warning(f"Could not bind Railway healthcheck port {port_env}: {port_err}")
 
         await self.notifier.send_system_message(
             f"🚀 <b>Aguatech Auto-Buy Bot Started!</b>\n"
-            f"Mode: {'🟡 Dry-Run' if self.dry_run else '🔴 Live Purchasing'}\n"
-            f"Daily Cap: {self.max_daily_leads} leads\n"
-            f"Polling: Every {self.polling_interval}s"
+            f"Mode: {'🟡 Dry-Run (Simulation)' if self.dry_run else '🔴 LIVE PURCHASING'}\n"
+            f"Daily Cap: {self.max_daily_leads} leads/day (Weekly: {self.max_weekly_leads})\n"
+            f"Polling Cadence: ~{self.polling_interval}s (Anti-detection enabled)"
         )
 
-        timeout = httpx.Timeout(connect=5.0, read=5.0, write=5.0, pool=5.0)
+        timeout = httpx.Timeout(connect=6.0, read=6.0, write=6.0, pool=6.0)
         client_kwargs: Dict[str, Any] = {"timeout": timeout}
         if self.proxy_url:
             client_kwargs["proxy"] = self.proxy_url
@@ -434,21 +474,28 @@ class AquatechAutomationCore:
         async with httpx.AsyncClient(**client_kwargs) as client:
             while self.is_running:
                 try:
+                    now = datetime.now()
+                    today = now.date()
+                    week = now.isocalendar()[1]
+                    month = now.month
+
                     # Midnight reset for daily quota
-                    today = datetime.now().date()
                     if today != self.current_date:
                         self.current_date = today
                         self.leads_bought_today = 0
                         logger.info("New day started. Reset daily lead purchase counter to 0.")
 
-                    # Budget limit guard
-                    if self.leads_bought_today >= self.max_daily_leads:
-                        logger.info(
-                            f"Daily lead budget limit reached ({self.leads_bought_today}/{self.max_daily_leads}). "
-                            "Pausing acquisition until tomorrow..."
-                        )
-                        await asyncio.sleep(3600)
-                        continue
+                    # Monday morning reset for weekly quota
+                    if week != self.current_week:
+                        self.current_week = week
+                        self.leads_bought_this_week = 0
+                        logger.info("New week started. Reset weekly lead purchase counter to 0.")
+
+                    # 1st of month reset for monthly quota
+                    if month != self.current_month:
+                        self.current_month = month
+                        self.leads_bought_this_month = 0
+                        logger.info("New month started. Reset monthly lead purchase counter to 0.")
 
                     leads = await self.fetch_live_leads(client)
 
@@ -457,17 +504,12 @@ class AquatechAutomationCore:
                         if not lead_id or lead_id in self.processed_lead_ids:
                             continue
 
-                        # Mark seen immediately
                         self.processed_lead_ids.add(lead_id)
-
-                        # Evaluate against Aguatech MHE catalog & negative filters
                         res = self.filters.evaluate_lead(lead)
                         if res.passed:
                             await self.execute_buy_action(client, lead, res)
                         else:
-                            logger.debug(
-                                f"[Skipped] ID {lead_id} ({lead.get('subject')}): {res.rejection_reason}"
-                            )
+                            logger.debug(f"[Skipped] ID {lead_id} ({lead.get('subject')}): {res.rejection_reason}")
 
                 except asyncio.CancelledError:
                     logger.info("Main loop cancelled.")
@@ -475,7 +517,9 @@ class AquatechAutomationCore:
                 except Exception as loop_err:
                     logger.error(f"Unexpected error in main monitoring loop: {loop_err}")
 
-                await asyncio.sleep(self.polling_interval)
+                # Human jitter sleep
+                sleep_dur = self.polling_interval + random.uniform(0.1, self.polling_jitter)
+                await asyncio.sleep(sleep_dur)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """
 Product Filter Engine for Aguatech Engineers Pvt. Ltd. (Pune)
 Specialized Material Handling Equipment (MHE) Matching Matrix
+Supports Tiered Priority Keywords, Buyer Verification, and Location Scoping.
 """
 
 import json
@@ -15,6 +16,8 @@ logger = logging.getLogger("AguatechBot.Filters")
 @dataclass
 class FilterResult:
     passed: bool
+    tier: int = 1                     # 1 = Tier 1 (High Value), 2 = Tier 2 (Standard), 3 = Tier 3 (Alert Only)
+    action: str = "BUY"               # "BUY" or "ALERT_ONLY" or "REJECT"
     matched_keyword: Optional[str] = None
     matched_location: Optional[str] = None
     rejection_reason: Optional[str] = None
@@ -22,6 +25,8 @@ class FilterResult:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "passed": self.passed,
+            "tier": self.tier,
+            "action": self.action,
             "matched_keyword": self.matched_keyword,
             "matched_location": self.matched_location,
             "rejection_reason": self.rejection_reason
@@ -32,7 +37,7 @@ class AguatechFilterEngine:
     """
     High-speed text analysis & matching engine for IndiaMART Buy Leads.
     Evaluates incoming leads against Aguatech's MHE catalog, negative filters,
-    and geographic boundaries in sub-milliseconds.
+    buyer verification, and geographic boundaries in descending priority order.
     """
 
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None, config_path: str = "config.json"):
@@ -49,44 +54,74 @@ class AguatechFilterEngine:
                 data = json.load(f)
             self._load_from_dict(data)
             logger.info(
-                f"[Filter Engine] Loaded {len(self.included_keywords)} product keywords, "
+                f"[Filter Engine] Loaded Tier 1 ({len(self.tier_1_keywords)}), "
+                f"Tier 2 ({len(self.tier_2_keywords)}), "
+                f"Tier 3 ({len(self.tier_3_keywords)}), "
                 f"{len(self.excluded_keywords)} negative keywords, "
                 f"{len(self.target_locations)} target locations."
             )
         except Exception as e:
             logger.error(f"[Filter Engine] Error reading config from {self.config_path}: {e}")
-            # Fallback defaults if config file is unavailable
             self._load_defaults()
 
     def _load_from_dict(self, data: Dict[str, Any]) -> None:
         filters = data.get("filters", {})
-        self.included_keywords: List[str] = [
-            k.strip().lower() for k in filters.get("included_keywords", []) if k.strip()
+        
+        # Support priority tiers if configured
+        priority_tiers = filters.get("priority_tiers", {})
+        self.tier_1_keywords: List[str] = [
+            k.strip().lower() for k in priority_tiers.get("tier_1_high_priority_buy", []) if k.strip()
         ]
+        self.tier_2_keywords: List[str] = [
+            k.strip().lower() for k in priority_tiers.get("tier_2_standard_buy", []) if k.strip()
+        ]
+        self.tier_3_keywords: List[str] = [
+            k.strip().lower() for k in priority_tiers.get("tier_3_alert_only", []) if k.strip()
+        ]
+
+        # Legacy fallback if priority_tiers not present
+        if not self.tier_1_keywords and not self.tier_2_keywords:
+            raw_included = filters.get("included_keywords", [])
+            self.tier_1_keywords = [k.strip().lower() for k in raw_included if k.strip()]
+
         self.excluded_keywords: List[str] = [
             k.strip().lower() for k in filters.get("excluded_keywords", []) if k.strip()
         ]
         self.target_locations: List[str] = [
             loc.strip().lower() for loc in filters.get("target_locations", []) if loc.strip()
         ]
+        self.pan_india_for_tier1: bool = bool(filters.get("pan_india_for_tier1", True))
+        self.require_verified_buyer: bool = bool(filters.get("require_verified_buyer", False))
         self.min_order_quantity: int = int(filters.get("min_order_quantity", 1))
 
     def _load_defaults(self) -> None:
-        self.included_keywords = [
-            "pallet truck", "hand pallet", "hydraulic pallet", "electric pallet",
-            "stacker", "electric stacker", "hydraulic stacker", "reach truck", "forklift",
-            "goods lift", "industrial lift", "scissor lift", "lift table", "dock leveler",
-            "drum handling", "barrel lifter", "barrel stacker", "aerial work platform",
-            "material handling equipment", "mhe"
+        self.tier_1_keywords = [
+            "goods lift", "industrial goods lift", "freight elevator", "hydraulic cargo lift",
+            "electric forklift", "battery operated forklift", "forklift",
+            "reach truck", "reach stacker", "electric reach stacker",
+            "scissor lift", "hydraulic scissor lift", "scissor lift table"
+        ]
+        self.tier_2_keywords = [
+            "battery operated pallet truck", "bopt", "electric pallet truck",
+            "pallet truck", "hand pallet", "hydraulic pallet", "pallet jack",
+            "stacker", "hydraulic stacker", "semi electric stacker", "manual stacker",
+            "dock leveler", "hydraulic dock leveler", "container loading ramp"
+        ]
+        self.tier_3_keywords = [
+            "drum handling", "drum stacker", "drum lifter", "drum tilter",
+            "aerial work platform", "die loader", "die table"
         ]
         self.excluded_keywords = [
-            "toy", "second hand", "used", "scrap", "repair only", "service only",
-            "rent", "hire", "water plant", "mineral water"
+            "toy", "second hand", "used", "scrap", "repair only", "repairing", "service only",
+            "rent", "hire", "rental", "job work", "water plant", "mineral water", "driver", "job"
         ]
         self.target_locations = [
             "maharashtra", "gujarat", "goa", "karnataka", "madhya pradesh",
-            "pune", "mumbai", "ahmedabad", "bengaluru", "indore"
+            "pune", "mumbai", "thane", "navi mumbai", "ahmedabad", "surat", "vadodara",
+            "rajkot", "bengaluru", "indore", "nashik", "aurangabad", "nagpur", "kolhapur"
         ]
+        self.pan_india_for_tier1 = True
+        self.require_verified_buyer = False
         self.min_order_quantity = 1
 
     @staticmethod
@@ -94,7 +129,6 @@ class AguatechFilterEngine:
         """Normalizes text for fast tokenized search."""
         if not text:
             return ""
-        # Lowercase and normalize whitespace
         cleaned = text.lower()
         cleaned = re.sub(r"[\r\n\t]+", " ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -102,10 +136,9 @@ class AguatechFilterEngine:
 
     def evaluate_lead(self, lead: Dict[str, Any]) -> FilterResult:
         """
-        Evaluates a raw lead payload from IndiaMART against Aguatech parameters.
-        Returns a FilterResult with pass/fail status and audit reasoning.
+        Evaluates a raw lead payload from IndiaMART against Aguatech parameters
+        in strict descending priority order.
         """
-        # IndiaMART fields can vary by API version; check standard aliases
         subject = self._clean_text(
             lead.get("subject") or lead.get("title") or lead.get("product_name") or lead.get("item_name") or ""
         )
@@ -116,7 +149,6 @@ class AguatechFilterEngine:
             lead.get("location") or lead.get("city") or lead.get("state") or lead.get("buyer_address") or ""
         )
         
-        # Parse quantity safely
         raw_qty = lead.get("qty") or lead.get("quantity") or 1
         try:
             qty = int(raw_qty)
@@ -128,6 +160,7 @@ class AguatechFilterEngine:
         if not combined_text:
             return FilterResult(
                 passed=False,
+                action="REJECT",
                 rejection_reason="Empty lead subject and description."
             )
 
@@ -135,98 +168,108 @@ class AguatechFilterEngine:
         # STEP 1: Strict Negative/Excluded Keyword Check (Protect budget!)
         # -----------------------------------------------------------------
         for bad_word in self.excluded_keywords:
-            # Word boundary check or substring match
             pattern = r"\b" + re.escape(bad_word) + r"\b"
             if re.search(pattern, combined_text) or bad_word in combined_text:
                 return FilterResult(
                     passed=False,
+                    action="REJECT",
                     rejection_reason=f"Matched negative keyword exclusion: '{bad_word}'"
                 )
 
         # -----------------------------------------------------------------
-        # STEP 2: Product Keyword Match (Must match Aguatech MHE catalog)
-        # -----------------------------------------------------------------
-        matched_kw = None
-        for good_word in self.included_keywords:
-            pattern = r"\b" + re.escape(good_word) + r"\b"
-            if re.search(pattern, combined_text) or good_word in combined_text:
-                matched_kw = good_word
-                break
-
-        if not matched_kw:
-            return FilterResult(
-                passed=False,
-                rejection_reason="No matching MHE product keyword found in requirement."
-            )
-
-        # -----------------------------------------------------------------
-        # STEP 3: Geographic Boundary Check
-        # -----------------------------------------------------------------
-        matched_loc = None
-        if self.target_locations:
-            for loc in self.target_locations:
-                if loc in location:
-                    matched_loc = loc
-                    break
-
-            if not matched_loc:
-                return FilterResult(
-                    passed=False,
-                    rejection_reason=f"Location '{location}' is outside target service clusters."
-                )
-        else:
-            matched_loc = location or "All Locations"
-
-        # -----------------------------------------------------------------
-        # STEP 4: Minimum Order Quantity Check
+        # STEP 2: Minimum Order Quantity Check
         # -----------------------------------------------------------------
         if qty < self.min_order_quantity:
             return FilterResult(
                 passed=False,
+                action="REJECT",
                 rejection_reason=f"Quantity ({qty}) is below minimum threshold ({self.min_order_quantity})."
             )
 
         # -----------------------------------------------------------------
-        # ALL CHECKS PASSED: Ready to buy!
+        # STEP 3: Buyer Authentication / Verification Check (Optional)
         # -----------------------------------------------------------------
+        if self.require_verified_buyer:
+            is_verified = lead.get("is_verified", False)
+            if not is_verified:
+                return FilterResult(
+                    passed=False,
+                    action="REJECT",
+                    rejection_reason="Buyer is unverified (require_verified_buyer=true)."
+                )
+
+        # -----------------------------------------------------------------
+        # STEP 4: DESCENDING PRIORITY MATCHING
+        # -----------------------------------------------------------------
+
+        # Check Tier 1: Highest Priority Capital Equipment (Goods Lifts, Forklifts, Reach Trucks)
+        for good_word in self.tier_1_keywords:
+            pattern = r"\b" + re.escape(good_word) + r"\b"
+            if re.search(pattern, combined_text) or good_word in combined_text:
+                # Tier 1 allows Pan-India if configured, or checks target locations
+                if self.pan_india_for_tier1 or self._matches_location(location):
+                    matched_loc = self._extract_matched_location(location) or location or "India"
+                    return FilterResult(
+                        passed=True,
+                        tier=1,
+                        action="BUY",
+                        matched_keyword=good_word,
+                        matched_location=matched_loc
+                    )
+
+        # Check Tier 2: Standard Core Volume Products (Pallet Trucks, Stackers, Dock Levelers)
+        for good_word in self.tier_2_keywords:
+            pattern = r"\b" + re.escape(good_word) + r"\b"
+            if re.search(pattern, combined_text) or good_word in combined_text:
+                if self._matches_location(location):
+                    matched_loc = self._extract_matched_location(location) or location
+                    return FilterResult(
+                        passed=True,
+                        tier=2,
+                        action="BUY",
+                        matched_keyword=good_word,
+                        matched_location=matched_loc
+                    )
+                else:
+                    return FilterResult(
+                        passed=False,
+                        tier=2,
+                        action="REJECT",
+                        rejection_reason=f"Tier 2 product '{good_word}' outside target locations: '{location}'"
+                    )
+
+        # Check Tier 3: Specialized MHE / Accessories (Alert Only - Zero Auto-Credits)
+        for good_word in self.tier_3_keywords:
+            pattern = r"\b" + re.escape(good_word) + r"\b"
+            if re.search(pattern, combined_text) or good_word in combined_text:
+                matched_loc = self._extract_matched_location(location) or location
+                return FilterResult(
+                    passed=True,
+                    tier=3,
+                    action="ALERT_ONLY",
+                    matched_keyword=good_word,
+                    matched_location=matched_loc
+                )
+
+        # No keyword matched
         return FilterResult(
-            passed=True,
-            matched_keyword=matched_kw,
-            matched_location=matched_loc or location
+            passed=False,
+            action="REJECT",
+            rejection_reason="No matching MHE product keyword found in requirement."
         )
 
+    def _matches_location(self, location: str) -> bool:
+        if not self.target_locations:
+            return True
+        for loc in self.target_locations:
+            if loc in location:
+                return True
+        return False
 
-if __name__ == "__main__":
-    # Self-test when executed directly
-    logging.basicConfig(level=logging.INFO)
-    engine = AguatechFilterEngine()
-
-    test_lead_pass = {
-        "id": "BL1001",
-        "subject": "Requirement for Hydraulic Hand Pallet Truck 2.5 Ton",
-        "desc": "Need heavy duty 2500kg hand pallet truck for warehouse in Chakan MIDC",
-        "location": "Pune, Maharashtra",
-        "qty": 2
-    }
-
-    test_lead_fail_negative = {
-        "id": "BL1002",
-        "subject": "Used Forklift Repair and Scrap battery",
-        "desc": "Want scrap and second hand stacker parts",
-        "location": "Pune, Maharashtra",
-        "qty": 1
-    }
-
-    test_lead_fail_location = {
-        "id": "BL1003",
-        "subject": "Electric Stacker 1.5 Ton needed",
-        "desc": "Required battery operated stacker",
-        "location": "Guwahati, Assam",
-        "qty": 1
-    }
-
-    print("\n--- TEST RESULTS ---")
-    for lead in [test_lead_pass, test_lead_fail_negative, test_lead_fail_location]:
-        res = engine.evaluate_lead(lead)
-        print(f"Lead ID {lead['id']} ({lead['subject']}):")
-        print(f"  Passed: {res.passed} | Reason/Keyword: {res.matched_keyword or res.rejection_reason}")
+    def _extract_matched_location(self, location: str) -> Optional[str]:
+        if not self.target_locations:
+            return location
+        for loc in self.target_locations:
+            if loc in location:
+                return loc
+        return None

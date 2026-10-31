@@ -73,7 +73,10 @@ class TelegramNotifier:
         lead: Dict[str, Any],
         is_dry_run: bool = False,
         success: bool = True,
-        matched_kw: Optional[str] = None
+        matched_kw: Optional[str] = None,
+        tier: int = 1,
+        action: str = "BUY",
+        quota_str: Optional[str] = None
     ) -> str:
         """Builds a rich, professional HTML message for the Telegram alert."""
         timestamp = datetime.now().strftime("%d-%b-%Y %I:%M:%S %p")
@@ -88,28 +91,38 @@ class TelegramNotifier:
         if len(desc) > 300:
             desc = desc[:300] + "..."
 
+        is_verified = lead.get("is_verified", False)
+        ver_badge = "✅ <b>Verified Buyer</b>" if is_verified else "⚪ Standard Inquiry"
+
         if is_dry_run:
-            header = "🟡 <b>[TEST RUN MATCH - DRY RUN]</b>"
-            footer = "⚠️ <i>Simulation mode active. No IndiaMART credits were deducted.</i>"
+            header = f"🟡 <b>[TEST MATCH - DRY RUN (Tier {tier})]</b>"
+            footer = "⚠️ <i>Simulation mode active. Zero credits deducted.</i>"
+        elif action == "ALERT_ONLY":
+            header = f"🔔 <b>[TIER {tier} ALERT - MANUAL REVIEW ONLY]</b>"
+            footer = "💡 <i>Auto-buy bypassed for this tier to save monthly credits. Review & buy manually if interested.</i>"
+        elif action == "QUOTA_REACHED":
+            header = f"🔔 <b>[BUDGET CAP REACHED - MANUAL REVIEW]</b>"
+            footer = f"⚠️ <i>Daily limit reached ({quota_str}). Review & buy manually on portal.</i>"
         elif success:
-            header = "🚀 <b>[AGUATECH MHE LEAD AUTO-BOUGHT]</b>"
-            footer = "✅ <b>Lead purchased in fraction of second! Details unlocked in Seller Panel.</b>"
+            header = f"🚀 <b>[AGUATECH MHE LEAD AUTO-BOUGHT (Tier {tier})]</b>"
+            footer = f"✅ <b>Lead purchased instantly! Unlocked in Seller Panel.</b>\n📊 <i>Daily Quota Used: {quota_str or 'N/A'}</i>"
         else:
-            header = "❌ <b>[AGUATECH LEAD PURCHASE FAILED]</b>"
+            header = f"❌ <b>[AGUATECH LEAD PURCHASE FAILED (Tier {tier})]</b>"
             footer = "⚠️ <i>API purchase request failed. Check cookies and credit balance.</i>"
 
         msg = (
             f"{header}\n\n"
             f"📦 <b>Product:</b> {subject}\n"
-            f"🏷️ <b>Matched Category:</b> <code>{kw}</code>\n"
+            f"🏷️ <b>Matched Keyword:</b> <code>{kw}</code> (Tier {tier})\n"
             f"📍 <b>Location:</b> {location}\n"
-            f"📊 <b>Required Quantity:</b> {qty} Unit(s)\n"
+            f"📊 <b>Required Qty:</b> {qty} Unit(s)\n"
+            f"🛡️ <b>Buyer Status:</b> {ver_badge}\n"
             f"🆔 <b>Lead ID:</b> <code>{lead_id}</code>\n"
-            f"⏰ <b>Captured At:</b> {timestamp}\n\n"
+            f"⏰ <b>Captured:</b> {timestamp}\n\n"
             f"📝 <b>Buyer Requirement:</b>\n"
             f"<blockquote>{desc}</blockquote>\n\n"
             f"{footer}\n\n"
-            f"🔗 <a href='https://seller.indiamart.com/leadmanager/'>Open IndiaMART Lead Manager</a>"
+            f"🔗 <a href='https://seller.indiamart.com/bltxn/?pref=relevant'>Open IndiaMART BuyLeads</a>"
         )
         return msg
 
@@ -118,7 +131,10 @@ class TelegramNotifier:
         lead: Dict[str, Any],
         is_dry_run: bool = False,
         success: bool = True,
-        matched_kw: Optional[str] = None
+        matched_kw: Optional[str] = None,
+        tier: int = 1,
+        action: str = "BUY",
+        quota_str: Optional[str] = None
     ) -> bool:
         """Sends an instant lead alert to the configured Telegram chat."""
         if not self.api_url or not self.chat_id:
@@ -131,7 +147,10 @@ class TelegramNotifier:
             lead=lead,
             is_dry_run=is_dry_run,
             success=success,
-            matched_kw=matched_kw
+            matched_kw=matched_kw,
+            tier=tier,
+            action=action,
+            quota_str=quota_str
         )
 
         payload = {
