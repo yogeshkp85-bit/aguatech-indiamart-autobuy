@@ -8,6 +8,8 @@ __pycache__/
 config.local.json
 *.cookie
 session_state.json
+*.key
+*.pem
 
 # Logs
 *.log
