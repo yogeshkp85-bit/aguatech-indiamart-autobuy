@@ -124,7 +124,7 @@ class AquatechAutomationCore:
         # IndiaMART Internal Endpoints
         self.feed_url = os.getenv(
             "FEED_URL",
-            "https://seller.indiamart.com/blapi/v1/buyleads"
+            "https://seller.indiamart.com/bltxn/?pref=relevant"
         )
         self.consume_url = os.getenv(
             "BUY_URL",
@@ -209,11 +209,10 @@ class AquatechAutomationCore:
         return {
             "User-Agent": self.user_agent,
             "Cookie": self.cookie_string,
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://seller.indiamart.com/buyleads/",
-            "X-Requested-With": "XMLHttpRequest",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://seller.indiamart.com/bltxn/?pref=relevant",
+            "Upgrade-Insecure-Requests": "1"
         }
 
     async def fetch_live_leads(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
@@ -232,17 +231,46 @@ class AquatechAutomationCore:
             res = await client.get(self.feed_url, headers=self.build_headers(), follow_redirects=False)
 
             if res.status_code == 200:
+                text = res.text
+                leads: List[Dict[str, Any]] = []
+
+                # Format 1: Embedded window.__BL_DATA__ state object in HTML
+                if "window.__BL_DATA__=" in text:
+                    try:
+                        idx = text.find("window.__BL_DATA__=") + len("window.__BL_DATA__=")
+                        data, _ = json.JSONDecoder().raw_decode(text[idx:])
+                        display_list = data.get("response", {}).get("DisplayList", [])
+                        for item in display_list:
+                            city = item.get("GLUSR_CITY") or item.get("GLUSR_USR_CITY") or ""
+                            state = item.get("GLUSR_STATE") or item.get("GLUSR_USR_STATE") or ""
+                            loc = f"{city}, {state}".strip(", ")
+                            leads.append({
+                                "id": str(item.get("ETO_OFR_ID") or ""),
+                                "subject": item.get("ETO_OFR_TITLE") or item.get("PRIME_MCAT_NAME") or "MHE Requirement",
+                                "desc": item.get("ETO_OFR_DESC") or "",
+                                "location": loc,
+                                "qty": item.get("ETO_OFR_QTY") or 1,
+                                "mcat": item.get("PRIME_MCAT_NAME") or "",
+                                "approx_value": item.get("ETO_OFR_APPROX_ORDER_VALUE") or "",
+                                "time": item.get("BLDATETIME") or "",
+                                "raw": item
+                            })
+                        if leads:
+                            return leads
+                    except Exception as parse_err:
+                        logger.error(f"Error parsing window.__BL_DATA__: {parse_err}")
+
+                # Format 2: Direct JSON response (API endpoints)
                 try:
                     payload = res.json()
-                    # IndiaMART payload structures: {"leads": [...]}, {"data": [...]}, or array
                     if isinstance(payload, dict):
                         return payload.get("leads") or payload.get("data") or payload.get("records") or []
                     elif isinstance(payload, list):
                         return payload
-                    return []
-                except Exception as json_err:
-                    logger.error(f"Error parsing feed JSON: {json_err}")
-                    return []
+                except Exception:
+                    pass
+
+                return leads
 
             elif res.status_code in (301, 302, 401, 403):
                 logger.error(

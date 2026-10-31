@@ -6,7 +6,7 @@
     "primary_sector": "Material Handling Equipment (MHE)"
   },
   "indiamart_session": {
-    "account_mobile": "9876543210",
+    "account_mobile": "7030914657",
     "cookie_string": "",
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
   },
@@ -154,8 +154,8 @@
     "min_order_quantity": 1
   },
   "notifications": {
-    "telegram_bot_token": "",
-    "telegram_chat_id": ""
+    "telegram_bot_token": "9095821492:AAF9hOiwAV9tvcmsIkV8ZECyzKgwWRONOoE",
+    "telegram_chat_id": "5419080014"
   },
   "system_settings": {
     "dry_run_mode": true,
