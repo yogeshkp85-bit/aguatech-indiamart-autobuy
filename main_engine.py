@@ -110,6 +110,14 @@ class AquatechAutomationCore:
             or settings_cfg.get("max_leads_per_day", 15)
         )
 
+        self.proxy_url = (
+            os.getenv("INDIAN_PROXY")
+            or os.getenv("PROXY_URL")
+            or os.getenv("HTTPS_PROXY")
+            or os.getenv("HTTP_PROXY")
+            or ""
+        ).strip().strip("'\"")
+
         # Telegram credentials
         self.telegram_bot_token = (
             os.getenv("TELEGRAM_BOT_TOKEN")
@@ -416,8 +424,14 @@ class AquatechAutomationCore:
             f"Polling: Every {self.polling_interval}s"
         )
 
-        timeout = httpx.Timeout(connect=3.0, read=4.0, write=4.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        timeout = httpx.Timeout(connect=5.0, read=5.0, write=5.0, pool=5.0)
+        client_kwargs: Dict[str, Any] = {"timeout": timeout}
+        if self.proxy_url:
+            client_kwargs["proxy"] = self.proxy_url
+            safe_display = self.proxy_url.split("@")[-1] if "@" in self.proxy_url else self.proxy_url
+            logger.info(f"🌐 Routing requests via proxy: {safe_display}")
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             while self.is_running:
                 try:
                     # Midnight reset for daily quota
