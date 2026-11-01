@@ -72,6 +72,7 @@ class AquatechAutomationCore:
         self.processed_lead_ids: Set[str] = self.load_lead_history()
         self.is_running = False
         self._cooldown_alert_sent = False
+        self._auth_alert_sent = False
         self.last_heartbeat_time = 0.0
 
     def load_configuration(self) -> None:
@@ -278,6 +279,26 @@ class AquatechAutomationCore:
 
                         # Cooldown cleared successfully
                         self._cooldown_alert_sent = False
+
+                        # Check authentication failure (expired cookie)
+                        if resp_code in (401, 403) or data.get("response", {}).get("MESSAGE") == "Authentication Failed":
+                            logger.error("🔴 [SESSION EXPIRED] IndiaMART session cookie is invalid or expired (CODE: 401)!")
+                            if not self._auth_alert_sent:
+                                await self.notifier.send_system_message(
+                                    "🚨 <b>[CRITICAL: INDIAMART SESSION EXPIRED]</b>\n\n"
+                                    "Your IndiaMART session cookie has expired (CODE: 401 Authentication Failed).\n"
+                                    "Lead acquisition is currently paused because IndiaMART is not serving leads.\n\n"
+                                    "👉 <b>How to refresh:</b>\n"
+                                    "1. Open your logged-in Chrome browser at seller.indiamart.com\n"
+                                    "2. Copy your updated cookie string\n"
+                                    "3. Paste it into your .env to immediately resume lead buying!"
+                                )
+                                self._auth_alert_sent = True
+                            await asyncio.sleep(60)
+                            self.load_configuration()
+                            return []
+
+                        self._auth_alert_sent = False
 
                         display_list = data.get("response", {}).get("DisplayList", [])
                         for item in display_list:
