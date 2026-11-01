@@ -213,6 +213,60 @@ class TelegramNotifier:
             logger.error(f"[Telegram Notifier] System message error: {e}")
             return False
 
+    async def send_heartbeat(
+        self,
+        status: str,
+        leads_today: int,
+        daily_cap: int,
+        leads_week: int,
+        weekly_cap: int,
+        leads_month: int,
+        monthly_cap: int,
+        pacing_seconds: float,
+        is_dry_run: bool,
+        is_cooldown: bool = False,
+        cooldown_remaining_min: float = 0.0,
+        gateway: str = "Office PC (Jio Pune IP)"
+    ) -> bool:
+        """Sends periodic heartbeat pulse to Telegram reassuring user the bot is actively scanning."""
+        if not self.api_url or not self.chat_id:
+            return False
+
+        now_str = datetime.now().strftime("%d-%b-%Y %I:%M %p")
+        mode_str = "🟡 Dry-Run (Simulation)" if is_dry_run else "🚀 LIVE PURCHASING"
+
+        if is_cooldown:
+            status_badge = f"🟡 <b>IN COOLDOWN</b> ({cooldown_remaining_min} mins remaining)"
+            footer = "⏳ <i>Bot is resting safely to clear IndiaMART limit. Will resume automatically.</i>"
+        else:
+            status_badge = f"🟢 <b>ACTIVELY SCANNING</b> (~{round(pacing_seconds)}s pacing)"
+            footer = "✨ <i>Everything is healthy! Matching leads will be claimed automatically.</i>"
+
+        text = (
+            f"💓 <b>[AGUATECH BOT PULSE - LIVE & MONITORING]</b>\n\n"
+            f"🕒 <b>Time:</b> {now_str}\n"
+            f"⚡ <b>Status:</b> {status_badge}\n"
+            f"🛡️ <b>Mode:</b> {mode_str}\n"
+            f"📊 <b>Quota Used Today:</b> <b>{leads_today} / {daily_cap} leads</b>\n"
+            f"📈 <b>Weekly / Monthly:</b> {leads_week}/{weekly_cap} week | {leads_month}/{monthly_cap} month\n"
+            f"🌐 <b>Gateway:</b> {gateway}\n\n"
+            f"{footer}"
+        )
+
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                res = await client.post(self.api_url, json=payload)
+                return res.status_code == 200
+        except Exception as e:
+            logger.error(f"[Telegram Notifier] Heartbeat error: {e}")
+            return False
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

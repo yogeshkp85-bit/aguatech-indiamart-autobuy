@@ -11,7 +11,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 import httpx
 
@@ -72,6 +72,7 @@ class AquatechAutomationCore:
         self.processed_lead_ids: Set[str] = self.load_lead_history()
         self.is_running = False
         self._cooldown_alert_sent = False
+        self.last_heartbeat_time = 0.0
 
     def load_configuration(self) -> None:
         """Reads configuration with environment variable precedence."""
@@ -132,6 +133,10 @@ class AquatechAutomationCore:
             os.getenv("MAX_LEADS_PER_MONTH")
             or settings_cfg.get("max_leads_per_month", 300)
         )
+        self.heartbeat_interval = float(
+            os.getenv("HEARTBEAT_INTERVAL_HOURS")
+            or settings_cfg.get("heartbeat_interval_hours", 2.0)
+        ) * 3600.0
 
         self.proxy_url = (
             os.getenv("INDIAN_PROXY")
@@ -250,18 +255,25 @@ class AquatechAutomationCore:
                                 retry_seconds = 900
                             retry_seconds += 15  # Buffer to guarantee cooldown expiration
                             minutes = round(retry_seconds / 60, 1)
+                            resume_time = (datetime.now() + timedelta(seconds=retry_seconds)).strftime("%I:%M %p")
                             logger.warning(
                                 f"🟡 [RATE LIMIT NOTICE] IndiaMART requested cooldown for {retry_seconds}s ({minutes} mins)..."
                             )
                             if not self._cooldown_alert_sent:
                                 await self.notifier.send_system_message(
-                                    f"⚠️ <b>IndiaMART Cooldown Active:</b> High-frequency rate limit detected.\n"
-                                    f"Bot is automatically pausing for <b>{minutes} minutes</b> to let the penalty timer fully reset.\n"
-                                    f"Safe adaptive pacing (24s–30s) will prevent future triggers."
+                                    f"🟡 <b>[COOLDOWN ACTIVE - INDIA-MART RATE LIMIT]</b>\n\n"
+                                    f"⏳ <b>Status:</b> Pausing live polling for <b>{minutes} minutes</b>.\n"
+                                    f"⏰ <b>Scheduled Resume:</b> ~{resume_time}\n"
+                                    f"🛡️ <i>Bot is paused safely to safeguard your seller account. It will automatically wake up and resume live monitoring.</i>"
                                 )
                                 self._cooldown_alert_sent = True
                             await asyncio.sleep(retry_seconds)
                             self._cooldown_alert_sent = False
+                            await self.notifier.send_system_message(
+                                f"🟢 <b>[COOLDOWN EXPIRED - BOT RESUMED]</b>\n\n"
+                                f"🚀 IndiaMART rate limit penalty has cleared.\n"
+                                f"📡 Active monitoring for Tier-1 & Tier-2 BuyLeads has resumed!"
+                            )
                             return []
 
                         # Cooldown cleared successfully
@@ -547,6 +559,24 @@ class AquatechAutomationCore:
                         self.current_month = month
                         self.leads_bought_this_month = 0
                         logger.info("New month started. Reset monthly lead purchase counter to 0.")
+
+                    # Periodic Heartbeat Pulse to Telegram
+                    current_ts = time.time()
+                    if current_ts - self.last_heartbeat_time >= self.heartbeat_interval:
+                        self.last_heartbeat_time = current_ts
+                        await self.notifier.send_heartbeat(
+                            status="ONLINE",
+                            leads_today=self.leads_bought_today,
+                            daily_cap=self.max_daily_leads,
+                            leads_week=self.leads_bought_this_week,
+                            weekly_cap=self.max_weekly_leads,
+                            leads_month=self.leads_bought_this_month,
+                            monthly_cap=self.max_monthly_leads,
+                            pacing_seconds=self.polling_interval,
+                            is_dry_run=self.dry_run,
+                            is_cooldown=False,
+                            gateway="Primary Office PC (Jio Pune IP)"
+                        )
 
                     leads = await self.fetch_live_leads(client)
 

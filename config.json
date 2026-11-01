@@ -211,6 +211,7 @@
     "max_leads_per_month": 330,
     "quota_reset_day_of_month": 7,
     "weekday_lead_target": 12,
-    "weekend_lead_target": 6
+    "weekend_lead_target": 6,
+    "heartbeat_interval_hours": 2.0
   }
 }
