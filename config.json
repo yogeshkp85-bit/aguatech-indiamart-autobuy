@@ -204,8 +204,8 @@
   },
   "system_settings": {
     "dry_run_mode": false,
-    "polling_interval_seconds": 4.5,
-    "polling_jitter_seconds": 1.0,
+    "polling_interval_seconds": 22.0,
+    "polling_jitter_seconds": 5.0,
     "max_leads_per_day": 11,
     "max_leads_per_week": 70,
     "max_leads_per_month": 330,

@@ -71,6 +71,7 @@ class AquatechAutomationCore:
 
         self.processed_lead_ids: Set[str] = self.load_lead_history()
         self.is_running = False
+        self._cooldown_alert_sent = False
 
     def load_configuration(self) -> None:
         """Reads configuration with environment variable precedence."""
@@ -233,22 +234,39 @@ class AquatechAutomationCore:
             if res.status_code == 200:
                 text = res.text
 
-                # Anti-Rate Limit Guard: Detect IndiaMART's cooldown notice
-                if "unusually high activity" in text or "request limit" in text or "Try again in" in text:
-                    logger.warning("🟡 [RATE LIMIT NOTICE] IndiaMART requested cooldown. Sleeping for 7.5 minutes...")
-                    await self.notifier.send_system_message(
-                        "⚠️ <b>IndiaMART Cooldown Notice:</b> High-frequency activity notice detected. "
-                        "Bot is automatically pausing for 7.5 minutes to safeguard your seller account."
-                    )
-                    await asyncio.sleep(450)
-                    return []
-
                 leads: List[Dict[str, Any]] = []
 
                 if "window.__BL_DATA__=" in text:
                     try:
                         idx = text.find("window.__BL_DATA__=") + len("window.__BL_DATA__=")
                         data, _ = json.JSONDecoder().raw_decode(text[idx:])
+
+                        # Check real IndiaMART rateLimit status from JSON payload
+                        rate_limit = data.get("rateLimit", {})
+                        resp_code = data.get("response", {}).get("CODE")
+                        if rate_limit.get("isActive") or resp_code == 429:
+                            retry_seconds = int(rate_limit.get("retryAfterSeconds") or 900)
+                            if retry_seconds <= 0:
+                                retry_seconds = 900
+                            retry_seconds += 15  # Buffer to guarantee cooldown expiration
+                            minutes = round(retry_seconds / 60, 1)
+                            logger.warning(
+                                f"🟡 [RATE LIMIT NOTICE] IndiaMART requested cooldown for {retry_seconds}s ({minutes} mins)..."
+                            )
+                            if not self._cooldown_alert_sent:
+                                await self.notifier.send_system_message(
+                                    f"⚠️ <b>IndiaMART Cooldown Active:</b> High-frequency rate limit detected.\n"
+                                    f"Bot is automatically pausing for <b>{minutes} minutes</b> to let the penalty timer fully reset.\n"
+                                    f"Safe adaptive pacing (24s–30s) will prevent future triggers."
+                                )
+                                self._cooldown_alert_sent = True
+                            await asyncio.sleep(retry_seconds)
+                            self._cooldown_alert_sent = False
+                            return []
+
+                        # Cooldown cleared successfully
+                        self._cooldown_alert_sent = False
+
                         display_list = data.get("response", {}).get("DisplayList", [])
                         for item in display_list:
                             city = item.get("GLUSR_CITY") or item.get("GLUSR_USR_CITY") or ""
@@ -550,8 +568,19 @@ class AquatechAutomationCore:
                 except Exception as loop_err:
                     logger.error(f"Unexpected error in main monitoring loop: {loop_err}")
 
-                # Human jitter sleep
-                sleep_dur = self.polling_interval + random.uniform(0.1, self.polling_jitter)
+                # Adaptive human-paced polling with business-hours intelligence
+                hour = datetime.now().hour
+                is_weekend = datetime.now().weekday() >= 5
+
+                # Daytime business hours (9 AM - 7 PM): standard pacing
+                if 9 <= hour < 19 and not is_weekend:
+                    base_interval = self.polling_interval
+                elif is_weekend:
+                    base_interval = max(self.polling_interval, 35.0)
+                else:
+                    base_interval = max(self.polling_interval, 45.0)
+
+                sleep_dur = base_interval + random.uniform(1.0, self.polling_jitter)
                 await asyncio.sleep(sleep_dur)
 
 
