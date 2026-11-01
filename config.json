@@ -10,6 +10,15 @@
     "cookie_string": "",
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
   },
+  "tradeindia_session": {
+    "userid": "17217043",
+    "profile_id": "37972693",
+    "key": "bf5f5808cd3f1d297e12999bdc0e05c7",
+    "buy_leads_api_url": "https://www.tradeindia.com/utils/my_buy_leads.html",
+    "inquiry_api_url": "https://www.tradeindia.com/utils/my_inquiry.html",
+    "max_leads_per_day": 14,
+    "max_leads_per_month": 400
+  },
   "filters": {
     "priority_tiers": {
       "tier_1_high_priority_buy": [
