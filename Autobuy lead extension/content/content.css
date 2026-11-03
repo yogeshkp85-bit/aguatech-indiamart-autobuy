@@ -1,0 +1,284 @@
+/* IndiaMart Lead Autoclick Pro - In-Page Overlay & Highlights */
+
+#im-autoclick-hud {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999999;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  border: 1px solid #334155;
+  padding: 12px 16px;
+  min-width: 280px;
+  max-width: 360px;
+  user-select: none;
+  transition: all 0.25s ease;
+}
+
+#im-autoclick-hud.minimized {
+  min-width: unset;
+  padding: 8px 12px;
+  border-radius: 20px;
+}
+
+.im-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+#im-autoclick-hud.minimized .im-hud-header {
+  margin-bottom: 0;
+}
+
+.im-hud-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #38bdf8;
+}
+
+.im-hud-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.im-hud-btn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.im-hud-btn:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.im-hud-btn.primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.im-hud-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.im-status-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.im-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.im-status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.im-hud-timer-bar-container {
+  width: 100%;
+  height: 4px;
+  background: #334155;
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0 8px 0;
+}
+
+.im-hud-timer-bar {
+  height: 100%;
+  background: #0284c7;
+  width: 100%;
+  transition: width 1s linear;
+}
+
+.im-hud-diag {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.im-hud-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #94a3b8;
+  padding-top: 6px;
+  border-top: 1px solid #1e293b;
+}
+
+.im-hud-stats span b {
+  color: #f1f5f9;
+}
+
+/* Matched Card Highlight */
+.im-autoclick-matched-card {
+  outline: 3px solid #22c55e !important;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.4) !important;
+  transition: outline 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+}
+
+.im-autoclick-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #15803d;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* In-Page Notification Toast */
+#im-autoclick-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10000000;
+  background: #064e3b;
+  color: #ecfdf5;
+  border: 1px solid #059669;
+  border-radius: 8px;
+  padding: 12px 18px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  display: none;
+  animation: imToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes imToastIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Live Inspect Modal */
+#im-inspect-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10000000;
+}
+
+#im-inspect-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10000001;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  width: 720px;
+  max-width: 95vw;
+  max-height: 85vh;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+
+.im-inspect-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.im-inspect-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.im-inspect-card-item {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.im-inspect-card-item.match {
+  border-left: 4px solid #22c55e;
+}
+
+.im-inspect-card-item.skip {
+  border-left: 4px solid #ef4444;
+}
+
+.im-inspect-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.im-inspect-meta {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.im-inspect-reason {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.im-inspect-reason.match {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.im-inspect-reason.skip {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}

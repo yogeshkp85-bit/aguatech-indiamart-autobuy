@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IndiaMart Seller BuyLeads - Test Simulation Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      margin: 0;
+      padding: 20px;
+    }
+    .header {
+      background: #ffffff;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .bl_card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 18px 22px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      position: relative;
+    }
+    .bl_title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #0284c7;
+      margin-bottom: 8px;
+    }
+    .detail-row {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .badge.gst { background: #dcfce7; color: #15803d; }
+    .badge.mobile { background: #e0f2fe; color: #0369a1; }
+    .btn-contact {
+      background: #00a699;
+      color: white;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-contact:hover {
+      background: #008f84;
+    }
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .notice {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+  </style>
+  <link rel="stylesheet" href="content/content.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h2 style="margin: 0; color: #0284c7;">IndiaMart Seller BuyLeads (Mock Environment)</h2>
+        <span style="font-size: 12px; color: #64748b;">Testing page to verify extension detection & click execution</span>
+      </div>
+      <div>
+        <a href="dashboard/dashboard.html" target="_blank" style="font-size: 13px; color: #0284c7; text-decoration: none; font-weight: 600;">Open Extension Dashboard ↗</a>
+      </div>
+    </div>
+
+    <div class="notice">
+      💡 <b>How to test here:</b> If you have loaded the extension in Chrome, enable the "Auto-Click Engine" in the extension popup or dashboard. The extension will automatically detect these cards, highlight matching ones with a green border, play the audio chime, and trigger the Contact Buyer button!
+    </div>
+
+    <!-- Lead Card 1 (Match: Electric Stacker, Maharashtra, 2 Piece) -->
+    <div class="bl_card" id="lead-101" data-leadid="bl-stacker-01">
+      <div class="bl_title">Heavy Duty Electric Stacker 1.5 Ton Capacity</div>
+      <div class="detail-row">
+        <span><b>Quantity:</b> 2 Piece</span>
+        <span><b>Est. Value:</b> ₹ 2,80,000</span>
+        <span class="buyer-loc"><b>Location:</b> Pune, Maharashtra</span>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <span class="badge gst">✔ GST Verified</span>
+        <span class="badge mobile">✔ Mobile Verified</span>
+        <span class="badge">Buyer Type: Wholesale Trader</span>
+      </div>
+      <p style="font-size: 12px; color: #64748b; margin: 0 0 10px 0;">Looking for brand new electric stacker for industrial warehouse operations.</p>
+      <div class="footer-actions">
+        <span style="font-size: 11px; color: #94a3b8;">Posted 10 mins ago</span>
+        <button class="btn-contact">Contact Buyer Now</button>
+      </div>
+    </div>
+
+    <!-- Lead Card 2 (Match: Scissor lift, Gujarat, 1 Piece) -->
+    <div class="bl_card" id="lead-102" data-leadid="bl-scissor-02">
+      <div class="bl_title">Hydraulic Scissor Lift Self Propelled</div>
+      <div class="detail-row">
+        <span><b>Quantity:</b> 1 Piece</span>
+        <span><b>Est. Value:</b> ₹ 4,50,000</span>
+        <span class="buyer-loc"><b>Location:</b> Ahmedabad, Gujarat</span>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <span class="badge gst">✔ GST Verified</span>
+        <span class="badge mobile">✔ Mobile Verified</span>
+      </div>
+      <div class="footer-actions">
+        <span style="font-size: 11px; color: #94a3b8;">Posted 25 mins ago</span>
+        <button class="btn-contact">Contact Buyer Now</button>
+      </div>
+    </div>
+
+    <!-- Lead Card 3 (Non-match: Negative keyword "scrap") -->
+    <div class="bl_card" id="lead-103" data-leadid="bl-scrap-03">
+      <div class="bl_title">Used Electric Forklift Scrap Battery and Motor</div>
+      <div class="detail-row">
+        <span><b>Quantity:</b> 1 Piece</span>
+        <span><b>Est. Value:</b> ₹ 15,000</span>
+        <span class="buyer-loc"><b>Location:</b> Delhi</span>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <span class="badge">Old Inventory</span>
+      </div>
+      <div class="footer-actions">
+        <span style="font-size: 11px; color: #94a3b8;">Posted 1 hour ago</span>
+        <button class="btn-contact">Contact Buyer Now</button>
+      </div>
+    </div>
+
+    <!-- Lead Card 4 (Match: Export UAE Lead) -->
+    <div class="bl_card" id="lead-104" data-leadid="bl-export-04">
+      <div class="bl_title">Electric Stacker for Warehouse Logistics</div>
+      <div class="detail-row">
+        <span><b>Quantity:</b> 4 Piece</span>
+        <span><b>Est. Value:</b> ₹ 9,00,000</span>
+        <span class="buyer-loc"><b>Location:</b> Dubai, United Arab Emirates</span>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <span class="badge gst">✔ Export Lead</span>
+        <span class="badge mobile">✔ Phone Verified</span>
+      </div>
+      <div class="footer-actions">
+        <span style="font-size: 11px; color: #94a3b8;">Posted 2 hours ago</span>
+        <button class="btn-contact">Contact Buyer Now</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

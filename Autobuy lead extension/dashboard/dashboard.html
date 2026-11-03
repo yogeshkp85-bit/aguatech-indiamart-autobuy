@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndiaMart Lead Autoclick Pro - Dashboard & Rules</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h2>Lead Autoclick</h2>
+          <span class="brand-tag">INDIAMART BOT PRO</span>
+        </div>
+      </div>
+
+      <div class="engine-quick-status">
+        <div class="eq-header">
+          <span>Engine Status</span>
+          <span id="side-status-indicator" class="status-pill paused">Paused</span>
+        </div>
+        <button id="side-toggle-engine-btn" class="btn-toggle-engine">▶ Activate Engine</button>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="tab-keywords">
+          <span class="nav-icon">🎯</span> Keywords & Rules
+        </button>
+        <button class="nav-item" data-tab="tab-categories">
+          <span class="nav-icon">📂</span> Categories & Negatives
+        </button>
+        <button class="nav-item" data-tab="tab-locations">
+          <span class="nav-icon">📍</span> Locations & Export
+        </button>
+        <button class="nav-item" data-tab="tab-controls">
+          <span class="nav-icon">🛡️</span> Verification & Limits
+        </button>
+        <button class="nav-item" data-tab="tab-history">
+          <span class="nav-icon">📊</span> Today's Click History
+        </button>
+        <button class="nav-item" data-tab="tab-simulator">
+          <span class="nav-icon">🧪</span> Lead Simulator
+        </button>
+        <button class="nav-item" data-tab="tab-data">
+          <span class="nav-icon">💾</span> Backup & CSV Transfer
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="device-info">
+          <span>Target Platform:</span>
+          <b>seller.indiamart.com</b>
+        </div>
+        <div class="version-label">v7.0.3 Custom Unlocked</div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="page-title">Keywords & Rules</h1>
+          <p id="page-desc">Define product keywords, minimum quantities, units, and per-keyword limits.</p>
+        </div>
+        <div class="topbar-stats">
+          <div class="stat-pill">
+            <span class="stat-pill-label">Today's Clicks:</span>
+            <b id="stat-pill-today">0</b>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Total Clicks:</span>
+            <b id="stat-pill-total">0</b>
+          </div>
+        </div>
+      </header>
+
+      <!-- TAB 1: Keywords -->
+      <section id="tab-keywords" class="tab-pane active">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>Product Keywords (<span id="kw-total-badge">0</span>)</h3>
+              <p class="card-subtitle">BuyLeads matching these keywords will be prioritized and automatically contacted.
+              </p>
+            </div>
+            <div class="card-actions">
+              <div class="sort-control">
+                <label>Sort by:</label>
+                <select id="kw-sort-select" class="select-sm">
+                  <option value="entry">By Entry</option>
+                  <option value="name">By Name</option>
+                </select>
+              </div>
+              <button id="import-kw-csv-btn" class="btn-secondary-sm">📁 Import CSV</button>
+              <input type="file" id="kw-csv-file-input" accept=".csv,.txt" style="display: none;">
+              <button id="add-kw-modal-btn" class="btn-primary-sm">+ Add Keyword</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Keyword</th>
+                  <th>Min Qty & Unit</th>
+                  <th>Target Location</th>
+                  <th>Min Order Value</th>
+                  <th>Daily Limit</th>
+                  <th>Clicks Today</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="keywords-tbody">
+                <!-- Rendered rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card-footer">
+            <button id="clear-all-keywords-btn" class="btn-danger-sm">Remove All Keywords</button>
+            <span class="note-text">Tip: Indian currency formatting and common plurals (e.g. stackers, lifts) are
+              matched automatically.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Categories & Negative Keywords -->
+      <section id="tab-categories" class="tab-pane">
+        <div class="grid-2col">
+          <!-- Standalone Categories -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Standalone Categories (<span id="cat-total-badge">0</span>)</h3>
+                <p class="card-subtitle">Match leads belonging to specific product categories without keywords.</p>
+              </div>
+              <div class="toggle-wrap">
+                <label class="switch-sm">
+                  <input type="checkbox" id="use-categories-toggle">
+                  <span class="slider-sm round"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="input-inline-form">
+              <input type="text" id="new-cat-input" placeholder="e.g. Material Handling Equipment" class="input-sm">
+              <button id="add-cat-btn" class="btn-primary-sm">+ Add</button>
+              <button id="import-cat-csv-btn" class="btn-secondary-sm">CSV</button>
+              <input type="file" id="cat-csv-file-input" accept=".csv,.txt" style="display: none;">
+            </div>
+
+            <ul id="categories-list" class="tag-list"></ul>
+
+            <div class="card-footer">
+              <button id="clear-all-categories-btn" class="btn-danger-sm">Remove All</button>
+            </div>
+          </div>
+
+          <!-- Negative Keywords -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Negative Keywords (<span id="neg-total-badge">0</span>)</h3>
+                <p class="card-subtitle">Leads containing any of these terms will be immediately rejected.</p>
+              </div>
+              <div class="toggle-wrap">
+                <label class="switch-sm">
+                  <input type="checkbox" id="use-negatives-toggle">
+                  <span class="slider-sm round"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="input-inline-form">
+              <input type="text" id="new-neg-input" placeholder="e.g. scrap, second hand, repair, hire"
+                class="input-sm">
+              <button id="add-neg-btn" class="btn-primary-sm">+ Add</button>
+            </div>
+
+            <ul id="negatives-list" class="tag-list"></ul>
+
+            <div class="card-footer">
+              <button id="clear-all-negatives-btn" class="btn-danger-sm">Remove All</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: Locations & Export Countries -->
+      <section id="tab-locations" class="tab-pane">
+        <div class="grid-2col">
+          <!-- Domestic Locations -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Domestic Locations (<span id="loc-total-badge">0</span>)</h3>
+                <p class="card-subtitle">Allow leads only from these Indian states or cities (leave empty for All
+                  India).</p>
+              </div>
+              <div class="toggle-wrap">
+                <label class="switch-sm">
+                  <input type="checkbox" id="use-locations-toggle">
+                  <span class="slider-sm round"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="input-inline-form">
+              <input type="text" id="new-loc-input" placeholder="e.g. Maharashtra, Gujarat, Delhi" class="input-sm">
+              <button id="add-loc-btn" class="btn-primary-sm">+ Add</button>
+              <button id="import-loc-csv-btn" class="btn-secondary-sm">CSV</button>
+              <input type="file" id="loc-csv-file-input" accept=".csv,.txt" style="display: none;">
+            </div>
+
+            <ul id="locations-list" class="tag-list"></ul>
+
+            <div class="card-footer">
+              <button id="clear-all-locations-btn" class="btn-danger-sm">Remove All</button>
+            </div>
+          </div>
+
+          <!-- Export Countries -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Export Countries (<span id="country-total-badge">0</span>)</h3>
+                <p class="card-subtitle">Target international leads from selected buyer countries.</p>
+              </div>
+              <div class="toggle-wrap">
+                <label class="switch-sm">
+                  <input type="checkbox" id="use-export-countries-toggle">
+                  <span class="slider-sm round"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="input-inline-form">
+              <input type="text" id="new-country-input" placeholder="e.g. USA, UK, UAE, Germany" class="input-sm">
+              <button id="add-country-btn" class="btn-primary-sm">+ Add</button>
+              <button id="import-country-csv-btn" class="btn-secondary-sm">CSV</button>
+              <input type="file" id="country-csv-file-input" accept=".csv,.txt" style="display: none;">
+            </div>
+
+            <ul id="countries-list" class="tag-list"></ul>
+
+            <div class="card-footer">
+              <button id="clear-all-countries-btn" class="btn-danger-sm">Remove All</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blocked Locations -->
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header">
+            <div>
+              <h3>Blocked Locations / States Blacklist (<span id="blocked-total-badge">0</span>)</h3>
+              <p class="card-subtitle">Leads from these cities or states will never be clicked.</p>
+            </div>
+            <div class="toggle-wrap">
+              <label class="switch-sm">
+                <input type="checkbox" id="use-blocked-locations-toggle">
+                <span class="slider-sm round"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="input-inline-form">
+            <input type="text" id="new-blocked-input" placeholder="e.g. Bihar, Assam" class="input-sm">
+            <button id="add-blocked-btn" class="btn-primary-sm">+ Add</button>
+          </div>
+
+          <ul id="blocked-list" class="tag-list"></ul>
+        </div>
+      </section>
+
+      <!-- TAB 4: Verification & Global Controls -->
+      <section id="tab-controls" class="tab-pane">
+        <div class="grid-2col">
+          <!-- Buyer Verification Filters -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Verification Filters</h3>
+                <p class="card-subtitle">Only pick leads from buyers verified with credentials.</p>
+              </div>
+              <div class="toggle-wrap">
+                <label class="switch-sm">
+                  <input type="checkbox" id="filter-verified-toggle">
+                  <span class="slider-sm round"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <label class="check-container">
+                <input type="checkbox" id="verify-gst">
+                <span class="checkmark"></span>
+                GST Verified Leads
+              </label>
+              <label class="check-container">
+                <input type="checkbox" id="verify-phone">
+                <span class="checkmark"></span>
+                Phone / Mobile Verified Leads
+              </label>
+              <label class="check-container">
+                <input type="checkbox" id="verify-email">
+                <span class="checkmark"></span>
+                Email Verified Leads
+              </label>
+              <label class="check-container">
+                <input type="checkbox" id="verify-whatsapp">
+                <span class="checkmark"></span>
+                WhatsApp Verified Leads
+              </label>
+              <label class="check-container">
+                <input type="checkbox" id="verify-website">
+                <span class="checkmark"></span>
+                Website / TrustSEAL Verified
+              </label>
+            </div>
+          </div>
+
+          <!-- Global Click Limits & Exclusions -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Global Click Controls</h3>
+                <p class="card-subtitle">Safety caps and retail lead exclusions.</p>
+              </div>
+            </div>
+
+            <div class="form-vertical">
+              <div class="form-group">
+                <label for="global-limit-input">Maximum leads to click today (0 = unlimited):</label>
+                <input type="number" id="global-limit-input" min="0" value="0" class="input-sm">
+              </div>
+
+              <div class="form-group">
+                <label for="global-min-order-input">Global Minimum Order Value (₹ Rupees):</label>
+                <input type="number" id="global-min-order-input" min="0" step="500" value="0" class="input-sm"
+                  placeholder="0 = no minimum">
+              </div>
+
+              <div class="form-group">
+                <label class="check-container">
+                  <input type="checkbox" id="exclude-retail-toggle">
+                  <span class="checkmark"></span>
+                  <b>Exclude retail leads</b> (rejects single piece / personal use requirements)
+                </label>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="form-group">
+                <label for="dashboard-refresh-sec">Auto-Refresh Interval (seconds):</label>
+                <input type="number" id="dashboard-refresh-sec" min="3" max="300" value="15" class="input-sm">
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button id="test-sound-btn" class="btn-secondary-sm">🔊 Test Audio Chime</button>
+                  <span class="note-text">Played instantly when a lead is captured.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: Click History -->
+      <section id="tab-history" class="tab-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>Today's Click History (<span id="history-total-count">0</span> leads)</h3>
+              <p class="card-subtitle">Timeline of all BuyLeads clicked today by the automation engine.</p>
+            </div>
+            <div class="card-actions">
+              <button id="export-history-csv-btn" class="btn-secondary-sm">📥 Export History CSV</button>
+              <button id="clear-history-btn" class="btn-danger-sm">Clear History</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Matched Keyword</th>
+                  <th>Requirement Title</th>
+                  <th>Buyer Location</th>
+                  <th>Quantity</th>
+                  <th>Order Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <!-- History rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: Lead Simulator -->
+      <section id="tab-simulator" class="tab-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>🧪 BuyLead Rule Simulator & Tester</h3>
+              <p class="card-subtitle">Test your keywords, filters, and location rules against sample BuyLead cards
+                before going live.</p>
+            </div>
+            <button id="load-sample-lead-btn" class="btn-secondary-sm">Load Preset Example</button>
+          </div>
+
+          <div class="form-group">
+            <label for="sim-lead-title">Requirement Title:</label>
+            <input type="text" id="sim-lead-title" class="input-sm"
+              value="Electric Stacker 1.5 Ton Capacity Required Urgently">
+          </div>
+
+          <div class="grid-3col">
+            <div class="form-group">
+              <label for="sim-lead-qty">Quantity & Unit:</label>
+              <input type="text" id="sim-lead-qty" class="input-sm" value="2 Piece">
+            </div>
+            <div class="form-group">
+              <label for="sim-lead-val">Order Value:</label>
+              <input type="text" id="sim-lead-val" class="input-sm" value="₹ 2,50,000">
+            </div>
+            <div class="form-group">
+              <label for="sim-lead-loc">Buyer Location / Country:</label>
+              <input type="text" id="sim-lead-loc" class="input-sm" value="Pune, Maharashtra">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Verification Badges Present:</label>
+            <div style="display: flex; gap: 15px; margin-top: 4px;">
+              <label><input type="checkbox" id="sim-v-gst" checked> GST</label>
+              <label><input type="checkbox" id="sim-v-phone" checked> Phone</label>
+              <label><input type="checkbox" id="sim-v-email"> Email</label>
+              <label><input type="checkbox" id="sim-v-whatsapp"> WhatsApp</label>
+            </div>
+          </div>
+
+          <button id="run-sim-test-btn" class="btn-primary" style="margin-top: 12px; width: 220px;">
+            ⚡ Test Against My Rules
+          </button>
+
+          <div id="sim-result-box" class="sim-result-box hidden">
+            <!-- Test result output -->
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 7: Backup & CSV Transfer -->
+      <section id="tab-data" class="tab-pane">
+        <div class="grid-2col">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Complete Backup</h3>
+                <p class="card-subtitle">Export all rules, keywords, locations, and settings to a JSON backup.</p>
+              </div>
+            </div>
+            <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
+              You can transfer this backup across different Chrome profiles or restore your rules at any time.
+            </p>
+            <div style="display: flex; gap: 10px;">
+              <button id="export-full-backup-btn" class="btn-primary-sm">📥 Export All Data (JSON)</button>
+              <button id="import-full-backup-btn" class="btn-secondary-sm">📤 Import Backup</button>
+              <input type="file" id="backup-file-input" accept=".json" style="display: none;">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Sample CSV Templates</h3>
+                <p class="card-subtitle">Download sample UTF-8 CSV templates formatted for bulk uploads.</p>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <button id="dl-sample-kw-csv" class="btn-secondary-sm">📄 Download Keywords CSV Template</button>
+              <button id="dl-sample-loc-csv" class="btn-secondary-sm">📄 Download Locations CSV Template</button>
+              <button id="dl-sample-country-csv" class="btn-secondary-sm">📄 Download Export Countries Template</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add Keyword Modal -->
+  <div id="kw-modal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Target Keyword</h3>
+        <button id="close-modal-btn" class="btn-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="kw-modal-name">Product Keyword *:</label>
+          <input type="text" id="kw-modal-name" class="input-sm" placeholder="e.g. Electric Forklift">
+        </div>
+
+        <div class="grid-2col">
+          <div class="form-group">
+            <label for="kw-modal-minqty">Minimum Buyer Quantity:</label>
+            <input type="number" id="kw-modal-minqty" min="1" value="1" class="input-sm">
+          </div>
+          <div class="form-group">
+            <label for="kw-modal-unit">Unit:</label>
+            <select id="kw-modal-unit" class="select-sm">
+              <option value="Piece">Piece / Pcs</option>
+              <option value="Kg">Kg / Kilogram</option>
+              <option value="Set">Set / Kit</option>
+              <option value="Meter">Meter</option>
+              <option value="Box">Box / Carton</option>
+              <option value="Strip">Strip / Stripe (Pharma)</option>
+              <option value="Bottle">Bottle</option>
+              <option value="Ton">Ton / Tonne</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2col">
+          <div class="form-group">
+            <label for="kw-modal-targetloc">Target Location (Optional):</label>
+            <input type="text" id="kw-modal-targetloc" class="input-sm" placeholder="e.g. Maharashtra or Mumbai">
+          </div>
+          <div class="form-group">
+            <label for="kw-modal-minorder">Min Order Value (₹ INR):</label>
+            <input type="number" id="kw-modal-minorder" min="0" value="0" class="input-sm" placeholder="0 = no min">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="kw-modal-limit">Daily Click Limit (0 = unlimited):</label>
+          <input type="number" id="kw-modal-limit" min="0" value="0" class="input-sm">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel-modal-btn" class="btn-secondary-sm">Cancel</button>
+        <button id="save-modal-kw-btn" class="btn-primary-sm">Save Keyword</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../utils/audio.js"></script>
+  <script src="../content/matcher.js"></script>
+  <script type="module" src="dashboard.js"></script>
+</body>
+
+</html>

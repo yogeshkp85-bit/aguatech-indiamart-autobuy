@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "IndiaMart Lead Autoclick Pro",
+  "version": "1.4.3",
+  "description": "Automated BuyLead matching and contact engine for IndiaMart sellers. Matches keywords, locations, quantities, and verification filters.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "IndiaMart Lead Autoclick Pro",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "dashboard/dashboard.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.indiamart.com/*",
+    "https://seller.indiamart.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.indiamart.com/*",
+        "https://seller.indiamart.com/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "all_frames": true,
+      "js": [
+        "utils/audio.js",
+        "content/parser.js",
+        "content/matcher.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
