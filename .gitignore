@@ -21,3 +21,6 @@ leads_db.sqlite3
 venv/
 ENV/
 .playwright/
+Indiamartgoogleextension/
+*.key.pub
+blRemoteEntry*.txt

@@ -212,7 +212,7 @@
     "telegram_chat_id": "5419080014"
   },
   "system_settings": {
-    "dry_run_mode": false,
+    "dry_run_mode": true,
     "polling_interval_seconds": 22.0,
     "polling_jitter_seconds": 5.0,
     "max_leads_per_day": 11,
